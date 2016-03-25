@@ -5,5 +5,9 @@ wojciech_szeszol_lab1/*.bin
 wojciech_szeszol_lab1/*.png
 wojciech_szeszol_lab1/*.exr
 wojciech_szeszol_lab2/data/*
+wojciech_szeszol_lab2/depth.jpg
+wojciech_szeszol_lab2/depth.mtl
+wojciech_szeszol_lab2/depth.obj
+wojciech_szeszol_lab2/render.png
 *.pdf
 
