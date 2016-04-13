@@ -60,11 +60,11 @@ def add_depth(depth, Is, scale_factor):
 
 def compute_depth(Is, scale_factor, level = None):
     if level == None:
-        pad = max(Is.shape) // 2
+        pad = 0 # max(Is.shape) // 2
         depth = compute_depth(numpy.pad(Is, pad, mode='edge'), scale_factor, math.log(min(Is.shape), 3) - 1)
         return depth[pad:1-pad, pad:1-pad]
 
-    if level > 1:
+    if level > 4:
         Is2 = skimage.transform.pyramid_reduce(Is, downscale = 3)
         next_depth = compute_depth(Is2, scale_factor * 3, level - 1)
         depth = skimage.transform.resize(next_depth, Is.shape, order = 1)
@@ -83,6 +83,11 @@ def write_obj(path, depth):
     tx = 1.0 / (depth.shape[1] - 1)
     ty = 1.0 / (depth.shape[0] - 1)
 
+    w = depth.shape[1]
+    h = depth.shape[0]
+    w1 = w - 1
+    h1 = h - 1
+
     result = io.StringIO()
     result.write("mtllib {}\n".format(mtl))
     result.write("usemtl {}\n".format(mat))
@@ -90,9 +95,27 @@ def write_obj(path, depth):
     for y in range(depth.shape[0]):
         for x in range(depth.shape[1]):
             result.write("v {:.3} {:.3} {:.3}\n".format(x * scale, -y * scale, -depth[y, x]))
-
+    
     result.write("\n")
-    result.write("vn 0 0 1\n")
+
+    for y in range(depth.shape[0]):
+        for x in range(depth.shape[1]):
+            a = (0, -scale, -depth[max(0, y - 1), x] + depth[y, x])
+            b = (-scale, 0, -depth[y, max(0, x - 1)] + depth[y, x])
+            c = (0, scale, -depth[min(h1, y + 1), x] + depth[y, x])
+            d = (scale, 0, -depth[y, min(w1, x + 1)] + depth[y, x])
+            
+            a = numpy.cross(a, b)
+            b = numpy.cross(c, d)
+
+            a = a / numpy.linalg.norm(a)
+            b = b / numpy.linalg.norm(b)
+
+            n = (a + b) * 0.5
+            n = n / numpy.linalg.norm(n)
+
+            result.write("vn {:.3} {:.3} {:.3}\n".format(n[0], n[1], n[2]))
+
     result.write("\n")
 
     for y in range(depth.shape[0]):
@@ -101,19 +124,14 @@ def write_obj(path, depth):
 
     result.write("\n")
 
-    w = depth.shape[1]
-    h = depth.shape[0]
-    w1 = w - 1
-    h1 = h - 1
-
     for y in range(h1):
         for x in range(w1):
             a = y * w + x + 1
             b = y * w + x + 2
             c = (y + 1) * w + x + 1
             d = (y + 1) * w + x + 2
-            result.write("f {}/{}/1 {}/{}/1 {}/{}/1\n".format(a, a, d, d, b, b))
-            result.write("f {}/{}/1 {}/{}/1 {}/{}/1\n".format(a, a, c, c, d, d))
+            result.write("f {}/{}/{} {}/{}/{} {}/{}/{}\n".format(a, a, a, d, d, d, b, b, b))
+            result.write("f {}/{}/{} {}/{}/{} {}/{}/{}\n".format(a, a, a, c, c, c, d, d, d))
 
     open(path, "w+").write(result.getvalue())
 
@@ -136,6 +154,9 @@ Ic = imageio.imread("data/calib/calib.tiff").astype(numpy.float32) * Ce("data/ca
 Ia = (If - Id) / Ic * 0.1
 Is = gray(Id) / gray(Ia)
 Is = numpy.clip(Is / Is.mean((0, 1)) * 0.5, 0, 1)
+
+imageio.imwrite("albedo.jpg", Ia)
+imageio.imwrite("shading.jpg", Is)
 
 depth_small = compute_depth(skimage.transform.pyramid_reduce(Is, downscale = 8), 0.005)
 albedo_small = skimage.transform.pyramid_reduce(Ia, downscale = 8)

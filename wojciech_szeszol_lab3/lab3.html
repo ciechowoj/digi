@@ -1,0 +1,493 @@
+<html>
+    <!-- Base file from example http://learningwebgl.com/lessons/lesson11/ -->
+
+<head>
+<title>Data-Driven BRDF &mdash; Lab 3</title>
+    
+<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+
+<script type="text/javascript" src="glMatrix-0.9.5.min.js"></script>
+<script type="text/javascript" src="webgl-utils.js"></script>
+
+<!-- //---------------- FRAGMENT SHADER ----------------// -->
+    
+<script id="shader-fs" type="x-shader/x-fragment">
+    precision highp float;
+    
+    //FIVE LIGHTS
+    const int num_lights = 6;
+    uniform vec4 lightsC[num_lights];
+    uniform vec3 lightsP[num_lights];
+
+    //NORMAL AND 3D POSITION OF THIS PIXEL
+    varying vec3 pNormal; 
+    varying vec3 surfp;
+
+    //THE DIRECTION OF THE MOUSE CONTROLLED LIGHT
+    uniform vec3 mouseLight;
+  
+    //THE TEXTURE WITH THE BRDF 256X8192 (TO MAKE IT A POWER OF 2) 
+    //ONLY FIRST 180 AND 8100 (90X90) HAVE VALID DATA (OTHERWISE RED)
+    uniform sampler2D brdfData;
+        
+    //SOME CONSTANTS
+    const float BRDF_SAMPLING_RES_THETA_H = 90.;
+    const float BRDF_SAMPLING_RES_THETA_D = 90.;
+    const float BRDF_SAMPLING_RES_PHI_D   = 180.;
+    const float M_PI = 3.1415926535897932384626433832795;
+    const float RED_SCALE = (1.0/1500.0);
+    const float GREEN_SCALE = (1.15/1500.0);
+    const float BLUE_SCALE = (1.66/1500.0);
+ 
+    
+    //THIS FUNCTION SAMPLES THE BRDF TEXTURE FROM A INCOMING AND OUTGOING DIRECTION AND THE NORMAL POINT
+    vec3 BRDF( vec3 toLight, vec3 toViewer, vec3 normal)
+    {
+    ///////////////////////////////////////////////////
+    ///////////////////////////////////////////////////
+    /////////////////HERE YOUR CODE////////////////////
+    ///////////////////////////////////////////////////
+    
+        vec3 b = vec3(0.1,0.1,0.1);
+        return b;
+    }
+    
+    //COMPUTES THE SHADING COLOR FOR A PARTICULAR POINT LIGHT
+    //LIGHTP IS POSITION. LIGHTC IS COLOR (LIGHT.A is the intensity of the light)
+    vec4 colorFromLight(vec3 lightp, vec4 lightc)
+    {
+        vec3 toViewer = vec3(0. ,0., 3.0) - surfp  ;                      
+        vec3 toLight = lightp - surfp;
+
+        vec3 b = BRDF( normalize(toLight), normalize(toViewer), pNormal ); 
+
+        float distToLight = length(toLight);
+        float falloff = 1.0/(distToLight*distToLight);
+        //falloff = 1.0;
+
+        float cosFactor = 0.0;
+        cosFactor = dot( toLight, pNormal );
+        if (cosFactor < 0.0) cosFactor = 0.0;
+        //cosFactor = 1.0;
+
+        return vec4(lightc.xyz * b * lightc.a * falloff * cosFactor, 1.0);       
+    }
+    
+    
+    void main(void) {
+        //some parameters to adjust final image
+        float brightness = 6.1;
+        float  gamma = 2.2;
+        
+        //init color
+        vec4 fragColor =  vec4(0.0, 0.0, 0.0, 1.0);
+        
+        //add the contribution of each light
+        for (int l = 0; l < num_lights; l++)
+        {    
+            fragColor = fragColor + colorFromLight (lightsP[l],lightsC[l]);
+        }
+        //add the contribution of the mouse controlled light
+        fragColor = fragColor + colorFromLight (mouseLight.xyz*1.3, vec4(1.0,1.0,1.0,.5));
+
+        //brigness correction
+        fragColor *= brightness;
+
+        // gamma correction 
+        float b = float( 1.0 / gamma );
+        fragColor.x = pow( fragColor.x, b );
+        fragColor.y = pow( fragColor.y, b );
+        fragColor.z = pow( fragColor.z, b );
+        
+        
+        gl_FragColor = fragColor;         
+    }
+        
+</script>
+
+    
+<!-- //----------        VERTEX SHADER ----------------// -->
+<script id="shader-vs" type="x-shader/x-vertex">
+    attribute vec3 aVertexPosition;
+    attribute vec3 aVertexNormal;
+
+    uniform mat4 uPMatrix;
+
+    varying vec3 pNormal; 
+    varying vec3 surfp;
+
+    void main(void) {
+        gl_Position = uPMatrix * vec4(aVertexPosition, 1.0);
+        surfp = aVertexPosition;
+        pNormal = aVertexNormal;        
+    }
+</script>
+
+
+<script type="text/javascript">
+
+    var gl;
+
+    function initGL(canvas) {
+        try {
+            gl = canvas.getContext("experimental-webgl");
+            gl.viewportWidth = canvas.width;
+            gl.viewportHeight = canvas.height;
+        } catch (e) {
+        }
+        if (!gl) {
+            alert("Could not initialise WebGL, sorry :-(");
+        }
+        //--- EXTENSIONS TO LOAD FLOAT TEXTURE -----//
+        var ext = gl.getExtension("OES_texture_float");
+        if (!ext) {
+           alert("This device does not support floating point textures");
+        }
+        
+        var ext = gl.getExtension("OES_texture_float_linear");
+        if (!ext) {
+           alert("This device can not filter floating point textures");
+        }
+        //-----------------------------------------//
+    }
+
+    function getShader(gl, id) {
+        var shaderScript = document.getElementById(id);
+        if (!shaderScript) {
+            return null;
+        }
+
+        var str = "";
+        var k = shaderScript.firstChild;
+        while (k) {
+            if (k.nodeType == 3) {
+                str += k.textContent;
+            }
+            k = k.nextSibling;
+        }
+
+        var shader;
+        if (shaderScript.type == "x-shader/x-fragment") {
+            shader = gl.createShader(gl.FRAGMENT_SHADER);
+        } else if (shaderScript.type == "x-shader/x-vertex") {
+            shader = gl.createShader(gl.VERTEX_SHADER);
+        } else {
+            return null;
+        }
+
+        gl.shaderSource(shader, str);
+        gl.compileShader(shader);
+
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+            alert(gl.getShaderInfoLog(shader));
+            return null;
+        }
+
+        return shader;
+    }
+
+    var shaderProgram;
+
+    function initShaders() {
+        var fragmentShader = getShader(gl, "shader-fs");
+        var vertexShader = getShader(gl, "shader-vs");
+
+        shaderProgram = gl.createProgram();
+        gl.attachShader(shaderProgram, vertexShader);
+        gl.attachShader(shaderProgram, fragmentShader);
+        gl.linkProgram(shaderProgram);
+
+        if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+            alert("Could not initialise shaders");
+        }
+
+        gl.useProgram(shaderProgram);
+
+        shaderProgram.vertexPositionAttribute = gl.getAttribLocation(shaderProgram, "aVertexPosition");
+        gl.enableVertexAttribArray(shaderProgram.vertexPositionAttribute);
+
+        shaderProgram.vertexNormalAttribute = gl.getAttribLocation(shaderProgram, "aVertexNormal");
+        gl.enableVertexAttribArray(shaderProgram.vertexNormalAttribute);
+
+        shaderProgram.pMatrixUniform = gl.getUniformLocation(shaderProgram, "uPMatrix");
+        
+        shaderProgram.mouseLightUniform = gl.getUniformLocation(shaderProgram, "mouseLight");
+        
+        shaderProgram.bdrfUniform = gl.getUniformLocation(shaderProgram,"brdfData")
+        shaderProgram.lightsCUniform = gl.getUniformLocation(shaderProgram,"lightsC");
+        shaderProgram.lightsPUniform = gl.getUniformLocation(shaderProgram,"lightsP");
+        
+    }
+
+    // ---------- LIGHTS ---------//
+    var lightsC = [];
+    var lightsP = [];
+    var lightPosition = [0.,0.,1.5];
+    
+    // ---------- INTERACTIVE LIGHT ---------//
+    
+    function handleMouseDown(event) {
+        u = event.clientX;
+        v = event.clientY;
+        var x2d = (u-250-6.5);
+        var y2d = (v-250-42.5);
+ 
+        if (Math.sqrt(x2d*x2d + y2d*y2d)< 215.)
+        {
+            x2d /= 215.;
+            y2d /= 215.;
+            
+            var z = Math.sqrt(1.- x2d*x2d - y2d*y2d);
+            lightPosition  = [x2d,-y2d, z];
+        }
+    }
+    
+    //---------------------------------------//
+    // ---------- OTHER LIGHTS ---------//
+    function initLights()
+    {
+        //5 lights
+        lightsC.push(1.0, 1.0, 1.0, 1.0,
+                     1.0, 1.0, 1.0, 1.0, 
+                     0.0, 1.0, 1.0, 1.0, 
+                     0.3, 0.3, 1.0, 1.0,
+                     1.0, 1.0, 1.0, 1.0,
+                     1.0, 1.0, 1.0, 0.3);            
+        
+        lightsP.push(  3.0, 0.0, 0.5,
+                      -4.0, 1.0, 3.0,
+                       0.0, 2.1, 2.1,
+                      -3.0, 0.0, 5.5,
+                       0.0, -1.5, 0.0,
+                       0.3, 0.3, 2.0);
+
+        gl.uniform4fv(shaderProgram.lightsCUniform, lightsC);
+        gl.uniform3fv(shaderProgram.lightsPUniform, lightsP);
+    }
+    
+    //---------------------------------------//
+    
+    // ---------- CREATE TEXTURE FROM BRDF FILE ---------//
+    var brdfTexture;
+    var brdfFile = "yellow-matte-plastic.binary";
+    
+    function initTexture() {   
+//----------------Read BRDF -----------   
+//tempArray can probably be avoided....
+        var tempArray;
+        
+        var oReq = new XMLHttpRequest();
+        oReq.open("GET", brdfFile, true);
+        oReq.responseType = "arraybuffer";
+        oReq.send();
+
+        oReq.onload = function (oEvent) {
+            var arrayBuffer = oReq.response; // Note: not oReq.responseText
+            var dims = new DataView(arrayBuffer,0,12);
+            var data = new DataView(arrayBuffer,12);
+            
+            dimss = new Uint32Array(dims.byteLength / Uint32Array.BYTES_PER_ELEMENT);        
+            dimss[0] = dims.getUint32(Uint32Array.BYTES_PER_ELEMENT, true);
+            dimss[1] = dims.getUint32(1*Uint32Array.BYTES_PER_ELEMENT, true);
+            dimss[2] = dims.getUint32(2*Uint32Array.BYTES_PER_ELEMENT, true);
+            console.log(dimss);
+            tempArray = new Float64Array(data.byteLength / Float64Array.BYTES_PER_ELEMENT);        
+            var len = tempArray.length;
+            var len = tempArray.length;
+            // Incoming data is raw floating point values
+            // with little-endian byte ordering.
+            for (var jj = 0; jj < len; ++jj) {
+              tempArray[jj] = data.getFloat64(jj * Float64Array.BYTES_PER_ELEMENT, true);
+            }
+
+            var pix = [];
+            for(var j=0; j<8192;j++)
+                for(var i=0;i <256;i++)
+                {    
+                    if (j < 8100 && i < 180)
+                    {
+                        var index = j*180+i
+                        var r = tempArray[index];
+                        index = index+(90*90*180);
+                        var g = tempArray[index];
+                        index = index+(90*90*180);
+                        var b = tempArray[index];
+                        //var r = j/8100;
+                        pix.push(r,g,b);                            
+                    }
+                    else
+                        pix.push(1.0,0.0,0.0);                            
+            }                   
+//------------------------------------- 
+            gl.activeTexture(gl.TEXTURE0);
+            brdfTexture = gl.createTexture();
+            gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+            gl.bindTexture(gl.TEXTURE_2D, brdfTexture);
+            gl.pixelStorei(gl.UNPACK_ALIGNMENT,1);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, 256, 8192,0, gl.RGB,  gl.FLOAT,new Float32Array(pix));
+
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.generateMipmap(gl.TEXTURE_2D);
+            gl.bindTexture(gl.TEXTURE_2D, null);
+        }
+        
+    }
+    
+    //----------------------------------------//
+
+
+
+    //--------------- CREATE SPHERE ---------//
+    
+    var sphereVertexPositionBuffer;
+    var sphereVertexNormalBuffer;
+    var sphereVertexIndexBuffer;
+    
+    function degToRad(degrees) {
+        return degrees * Math.PI / 180;
+    }
+    function initBuffers() {
+        var latitudeBands = 150;
+        var longitudeBands = 150;
+        var radius = 1;
+
+        var vertexPositionData = [];
+        var normalData = [];
+        var textureCoordData = [];
+        for (var latNumber=0; latNumber <= latitudeBands; latNumber++) {
+            var theta = latNumber * Math.PI / latitudeBands;
+            var sinTheta = Math.sin(theta);
+            var cosTheta = Math.cos(theta);
+
+            for (var longNumber=0; longNumber <= longitudeBands; longNumber++) {
+                var phi = longNumber * 2 * Math.PI / longitudeBands;
+                var sinPhi = Math.sin(phi);
+                var cosPhi = Math.cos(phi);
+
+                var x = cosPhi * sinTheta;
+                var y = cosTheta;
+                var z = sinPhi * sinTheta;
+
+                normalData.push(x);
+                normalData.push(y);
+                normalData.push(z);
+                vertexPositionData.push(radius * x);
+                vertexPositionData.push(radius * y);
+                vertexPositionData.push(radius * z);
+                
+                
+            }
+        }
+
+        var indexData = [];
+        for (var latNumber=0; latNumber < latitudeBands; latNumber++) {
+            for (var longNumber=0; longNumber < longitudeBands; longNumber++) {
+                var first = (latNumber * (longitudeBands + 1)) + longNumber;
+                var second = first + longitudeBands + 1;
+                indexData.push(first);
+                indexData.push(second);
+                indexData.push(first + 1);
+
+                indexData.push(second);
+                indexData.push(second + 1);
+                indexData.push(first + 1);
+            }
+        }
+
+        sphereVertexNormalBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, sphereVertexNormalBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normalData), gl.STATIC_DRAW);
+        sphereVertexNormalBuffer.itemSize = 3;
+        sphereVertexNormalBuffer.numItems = normalData.length / 3;
+
+        sphereVertexPositionBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, sphereVertexPositionBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexPositionData), gl.STATIC_DRAW);
+        sphereVertexPositionBuffer.itemSize = 3;
+        sphereVertexPositionBuffer.numItems = vertexPositionData.length / 3;
+
+        sphereVertexIndexBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, sphereVertexIndexBuffer);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indexData), gl.STATIC_DRAW);
+        sphereVertexIndexBuffer.itemSize = 1;
+        sphereVertexIndexBuffer.numItems = indexData.length;
+            
+    }
+
+    //-------THIS IS JUST TO TRANSLATE THE SPHERE BACK ----///
+    var pMatrix = mat4.create();
+    //--------------------------------------//
+    
+    function drawScene() {
+        gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+        mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix);
+        
+        mat4.translate(pMatrix, [0, 0, -3]);
+        
+        gl.uniform3fv(shaderProgram.mouseLightUniform, lightPosition);
+        gl.uniform1i(shaderProgram.bdrfUniform, 0);
+
+        gl.bindTexture(gl.TEXTURE_2D, brdfTexture);    
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, sphereVertexPositionBuffer);
+        gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, sphereVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, sphereVertexNormalBuffer);
+        gl.vertexAttribPointer(shaderProgram.vertexNormalAttribute, sphereVertexNormalBuffer.itemSize, gl.FLOAT, false, 0, 0);
+
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, sphereVertexIndexBuffer);
+        gl.uniformMatrix4fv(shaderProgram.pMatrixUniform, false, pMatrix);
+        gl.drawElements(gl.TRIANGLES, sphereVertexIndexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
+    }
+
+
+    function tick() {
+        requestAnimFrame(tick);
+        drawScene();
+    }
+
+
+    function webGLStart() {
+        var canvas = document.getElementById("brdf-canvas");
+        initGL(canvas);
+        initShaders();
+        initBuffers();
+        initTexture();
+        initLights();
+
+        gl.clearColor(0.2, 0.2, 0.2, 1.0);
+        gl.enable(gl.DEPTH_TEST);
+
+        canvas.onmousedown = handleMouseDown;
+
+        tick();
+    }
+    
+    // ------ GET THE FILE NAME AND RE-MAKE TEXTURE -----///
+    var openFile = function(event) {
+        var input = event.target;
+
+        var theFile = document.getElementById('thefile');
+        f = theFile.value.replace(/.*[\/\\]/, '');
+        brdfFile = f;
+        initTexture();
+      };
+    //-----------------THE END -----------------//
+</script>
+
+
+</head>
+
+
+<body onload="webGLStart();">
+    <p>Lab 3: A BRDF Visualizer</p>
+    <canvas id="brdf-canvas"  style="border: none;" width="500" height="500"></canvas>
+    <br/>
+    <input type='file' id="thefile" accept='binary' onchange='openFile(event)'><br>
+    <div id='output'>
+</body>
+
+</html>
