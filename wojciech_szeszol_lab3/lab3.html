@@ -48,28 +48,34 @@
         normal = normalize(normal);
         vec3 h = normalize((toLight + toViewer) * 0.5);
 
-        vec3 hh = normalize(normal - normal * dot(h, normal));
-        vec3 hx = -normal * dot(h, hh) + hh * dot(h, normal);
+        vec3 hh = normalize(h - normal * dot(h, normal));
+        vec3 hx = normalize(-normal * dot(h, hh) + hh * dot(h, normal));
         vec3 hy = normalize(cross(h, hx));
 
         vec3 omega_i = vec3(dot(toLight, hx), dot(toLight, hy), dot(toLight, h));
+        vec2 omega_i_2d = normalize(omega_i.xy);
 
         float theta_h = acos(dot(normal, h)) / M_PI * 2.0;
         float theta_d = acos(dot(toLight, h)) / M_PI * 180.0;
-        float phi_d = (atan(omega_i.y, omega_i.x) + M_PI) / M_PI * 180.0;
+        float phi_d = (atan(omega_i_2d.y, omega_i_2d.x) + M_PI) / M_PI * 180.0;
 
-        if (phi_d > 180.0) {
+        if (phi_d >= 180.0) {
             phi_d -= 180.0;
         }
 
-        float q = sqrt(theta_h) * 90.0;
+        if (abs(phi_d) < 0.01) {
+            return vec3(1.0, 0.0, 0.0);
+        }
+
+        float q = clamp(sqrt(clamp(theta_h, 0.0, 1.0)) * 90.0, 0.0, 90.0);
+        float qq = clamp(q + 1.0, 0.0, 90.0);
         float alpha = fract(q);
 
         float index0 = clamp(theta_d, 0.0, 90.0) + max(0.0, floor(q)) * 90.0;
-        float index1 = clamp(theta_d, 0.0, 90.0) + max(0.0, floor(q + 1.0)) * 90.0;
+        float index1 = clamp(theta_d, 0.0, 90.0) + max(0.0, floor(qq)) * 90.0;
 
-        vec4 color0 = texture2D(brdfData, vec2(phi_d / 256.0, index0 / 8192.0));
-        vec4 color1 = texture2D(brdfData, vec2(phi_d / 256.0, index1 / 8192.0));
+        vec4 color0 = texture2D(brdfData, vec2(clamp(phi_d, 0.0, 180.0) / 256.0, index0 / 8192.0));
+        vec4 color1 = texture2D(brdfData, vec2(clamp(phi_d, 0.0, 180.0) / 256.0, index1 / 8192.0));
 
         vec4 color = (1.0 - alpha) * color0 + alpha * color1;
 
